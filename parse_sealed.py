@@ -95,8 +95,14 @@ class KeyRequest(object):
         self.misc_mask = data[72:76]
         self.reserved2 = data[76:436]
 
+def xlf(s):
+    return hexlify(s).decode('utf-8')
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print('usage: %s <sealed.bin>' % sys.argv[0])
+        sys.exit(1)
+
     with open(sys.argv[1], 'rb') as f:
         data = f.read()
 
@@ -114,13 +120,13 @@ if __name__ == '__main__':
         '%20s\t%d (%s)\n' % ('key_policy', key_request.key_policy,
                        KEY_POLICY[key_request.key_policy]) +\
         '%20s\t%d\n' % ('isv_svn', key_request.isv_svn) +\
-        '%20s\t%s\n' % ('cpu_svn', hexlify(key_request.cpu_svn)) +\
-        '%20s\t%s\n' % ('attribute_mask', hexlify(key_request.attribute_mask)) +\
-        '%20s\t%s\n' % ('key_id', hexlify(key_request.key_id)) +\
-        '%20s\t%s\n' % ('misc_mask', hexlify(key_request.misc_mask)) +\
+        '%20s\t%s\n' % ('cpu_svn', xlf(key_request.cpu_svn)) +\
+        '%20s\t%s\n' % ('attribute_mask', xlf(key_request.attribute_mask)) +\
+        '%20s\t%s\n' % ('key_id', xlf(key_request.key_id)) +\
+        '%20s\t%s\n' % ('misc_mask', xlf(key_request.misc_mask)) +\
         '\n### aesgcm data ###\n' +\
         '%20s\t%d bytes\n' % ('ciphertext length', sealed_data.plain_text_offset) +\
         '%20s\t%d bytes\n' % ('aad length', aesgcm_data.payload_size - sealed_data.plain_text_offset) +\
-        '%20s\t%s\n' % ('tag', hexlify(aesgcm_data.payload_tag)) +\
-        '%20s\t%s\n' % ('ciphertext', hexlify(aesgcm_data.payload[:sealed_data.plain_text_offset])) +\
-        '%20s\t%s\n' % ('aad', hexlify(aesgcm_data.payload[sealed_data.plain_text_offset:])))
+        '%20s\t%s\n' % ('tag', xlf(aesgcm_data.payload_tag)) +\
+        '%20s\t%s\n' % ('ciphertext', xlf(aesgcm_data.payload[:sealed_data.plain_text_offset])) +\
+        '%20s\t%s\n' % ('aad', xlf(aesgcm_data.payload[sealed_data.plain_text_offset:])))

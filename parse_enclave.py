@@ -20,8 +20,11 @@ from binascii import hexlify
 from struct import unpack
 import sys
 
-if sys.version_info[0] != 2:
-    print('sorry, parse_enclave.py does not support Python 3 yet :(')
+def xlf(s):
+    return hexlify(s).decode('utf-8')
+
+if sys.version_info[0] < 3:
+    print('sorry, parse_enclave.py requires Python 3')
     sys.exit(1)
 
 try:
@@ -52,7 +55,7 @@ class Parser(object):
             sys.exit(1)
 
     def find_sgxmeta_header(self):
-        sgxmeta_header = "\x4c\x0e\x5d\x63\x94\x02\xa8\x86\x01\x00\x00\x00\x01\x00\x00\x00"
+        sgxmeta_header = b"\x4c\x0e\x5d\x63\x94\x02\xa8\x86\x01\x00\x00\x00\x01\x00\x00\x00"
         pos = self.blob.find(sgxmeta_header)
         if pos != -1:
             return pos
@@ -87,7 +90,7 @@ class Parser(object):
         # NOTE: this is a best effort heuristic to extract ECALLs table
         #       memory address. It's based on manual analysis and rely
         #    on finding the right things at the expected place.
-        ecalls_magic = "\x44\x49\x43\x4f"
+        ecalls_magic = b"\x44\x49\x43\x4f"
         # it's usually located in more than one place
         pos = 0
         while True:
@@ -97,8 +100,8 @@ class Parser(object):
             # skip danger zone
             pos += 16
             # find mov opcode in next 32 bytes (488b15xxxxxxxx)
-            # movpos = self.blob.find("\x48\x8b\x15", pos, pos+32)
-            movpos = self.blob.find("\x48\x8b", pos, pos+32)
+            # movpos = self.blob.find(b"\x48\x8b\x15", pos, pos+32)
+            movpos = self.blob.find(b"\x48\x8b", pos, pos+32)
             # we have a match!
             if movpos != -1:
                 # extract address offset from mov opcode
@@ -118,7 +121,7 @@ class Parser(object):
         # NOTE: this is a best effort heuristic to extract ECALLs table
         #       memory address. It's based on manual analysis and rely
         #    on finding the right things at the expected place.
-        ecalls_magic = "\x44\x49\x43\x4f"
+        ecalls_magic = b"\x44\x49\x43\x4f"
         # it's usually located in more than one place
         pos = 0
         while True:
@@ -126,7 +129,7 @@ class Parser(object):
             if pos == -1:
                 break
             # find mov opcode in next 32 bytes (488b15xxxxxxxx)
-            movpos = self.blob.find("\xa1", pos, pos+48)
+            movpos = self.blob.find(b"\xa1", pos, pos+48)
             # we have a match!
             if movpos != -1:
                 # extract table virtual addr from mov opcode
@@ -140,7 +143,7 @@ class Parser(object):
         # NOTE: this is a best effort heuristic to extract ECALLs table
         #       memory address. It's based on manual analysis and rely
         #    on finding the right things at the expected place.
-        ecalls_magic = "\x44\x49\x43\x4f"
+        ecalls_magic = b"\x44\x49\x43\x4f"
         # it's usually located in more than one place
         pos = 0
         while True:
@@ -148,7 +151,7 @@ class Parser(object):
             if pos == -1:
                 break
             # find mov opcode in next 32 bytes (488b15xxxxxxxx)
-            movpos = self.blob.find("\x8b\x15", pos, pos+0x15)
+            movpos = self.blob.find(b"\x8b\x15", pos, pos+0x15)
             # we have a match!
             if movpos != -1:
                 # extract table virtual addr from mov opcode
@@ -228,13 +231,13 @@ class Parser(object):
         # 1. Get PE signature offset (at 0xE0)
         sigpos, = unpack("<I", self.blob[0x3c:0x40])
         # check if the signature 'PE\0\0' is there
-        return self.blob[sigpos:sigpos+4] == 'PE\0\0'
+        return self.blob[sigpos:sigpos+4] == b'PE\0\0'
 
     def get_arch_elf(self):
         bits = None
-        if self.blob[0x4] == '\x01':
+        if self.blob[0x4] == 0x01:
             bits = 32
-        elif self.blob[0x4] == '\x02':
+        elif self.blob[0x4] == 0x02:
             bits = 64
         return bits 
 
@@ -412,12 +415,13 @@ class Parser(object):
             return None
         # grab values
         fields = []
-        fields.append(('reserved', ord(blob[0])&1))
-        fields.append(('debug', ord(blob[0])>>1&1))
-        fields.append(('mode64bit', ord(blob[0])>>2&1))
-        fields.append(('reserved', ord(blob[0])>>3&1))
-        fields.append(('provisionkey', ord(blob[0])>>4&1))
-        fields.append(('einitokenkey', ord(blob[0])>>5&1))
+        byte0 = blob[0] if isinstance(blob[0], int) else ord(blob[0])
+        fields.append(('reserved', byte0&1))
+        fields.append(('debug', byte0>>1&1))
+        fields.append(('mode64bit', byte0>>2&1))
+        fields.append(('reserved', byte0>>3&1))
+        fields.append(('provisionkey', byte0>>4&1))
+        fields.append(('einitokenkey', byte0>>5&1))
         # reserved? bits 6:63
         fields.append(('xfrm', blob[8:]))
         return fields
@@ -448,7 +452,7 @@ if __name__ == "__main__":
     # print sigstruct
     for k, v in sigstruct:
         if isinstance(v, (bytes)):
-            print("%20s\t%s" % (k.upper(), hexlify(v)))
+            print("%20s\t%s" % (k.upper(), xlf(v)))
         else:
             print("%20s\t%d" % (k.upper(), v))
 
@@ -467,10 +471,10 @@ if __name__ == "__main__":
         sgxmeta = p.sgxmeta(sgxmeta_pos)
         print('\n# sgxmeta found at 0x%s\n' % hex(sgxmeta_pos))
         for k, v in sgxmeta:
-            if isinstance(v, (long, int)):
+            if isinstance(v, int):
                 print('%20s\t%d' % (k.upper(), v))
             else:
-                print('%20s\t%s' % (k.upper(), hexlify(v)))
+                print('%20s\t%s' % (k.upper(), xlf(v)))
     else:
         print('\n# sgxmeta not found')
 
